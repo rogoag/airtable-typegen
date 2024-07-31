@@ -2,16 +2,16 @@ import { Command, Flags } from '@oclif/core'
 import { paramCase, pascalCase } from 'change-case'
 import * as dotenv from 'dotenv'
 import fs from 'fs-extra'
-import { table } from 'node:console'
 import path from 'node:path'
 
 import { BaseListMetadataSchema, BaseMetadata, TableListMetadataSchema, TableMetadata } from '../schemas/api'
-import { FieldMetadataSchema } from '../schemas/fields'
 import { AIRTABLE_API_BASE, AIRTABLE_API_BASE_META_PATH, AIRTABLE_API_VERSION } from '../utils/constants'
 import {
   AttachmentPyImpl,
   AttachmentTsTmpl,
   AttachmentZodTmpl,
+  BarcodePyImpl,
+  ButtonPyImpl,
   CollaboratorPyImpl,
   CollaboratorTsTmpl,
   CollaboratorZodTmpl,
@@ -19,7 +19,7 @@ import {
   getTsType,
   getZodType,
 } from '../utils/field-mappings'
-import { getFieldEnumName, hasAttachmentField, hasCollaboratorField, isReadonlyField } from '../utils/helpers'
+import { getFieldEnumName, hasAttachmentField, hasCollaboratorField, hasFieldType, isReadonlyField } from '../utils/helpers'
 import httpRequest from '../utils/http-request'
 
 dotenv.config()
@@ -184,7 +184,7 @@ Reads environment from .env file if present in current working directory.`
   private async generateZodSchemas(base: BaseMetadata, tables: TableMetadata[], includeMapping: boolean) {
     const lines: string[] = []
     lines.push("import { z } from 'zod'")
-    
+
     lines.push('')
 
     const allFields = tables.map((t) => t.fields).flat()
@@ -237,9 +237,9 @@ Reads environment from .env file if present in current working directory.`
       lines.push(`export type ${tableTypeName} = z.infer<typeof ${tableSchemaName}>`)
       lines.push('')
 
-      if (includeMapping) {        
+      if (includeMapping) {
         const mappingTableName = `${tableTypeName}FieldIdMapping`;
-        
+
         tableIds.push(`  '${pascalCase(table.name)}': '${table.id}',`);
         tableIdToObjectMappings.push(`  '${table.id}': ${mappingTableName},`)
         lines.push(`export const ${mappingTableName} = {`)
@@ -273,13 +273,13 @@ Reads environment from .env file if present in current working directory.`
     const lines: string[] = []
     const tableIds: string[] = [];
     const tableIdToObjectMappings: string[] = [];
-    
+
     tableIds.push(`export const TableIds = {`);
     tableIdToObjectMappings.push(`export const TableIdToObjectMapping = {`);
 
     for (const table of tables) {
       const tableName = pascalCase(table.name)
-      
+
       const mappingTableName = `${tableName}FieldIdMapping`;
       lines.push(`export const ${mappingTableName} = {`)
       tableIds.push(`  '${table.name}': '${table.id}',`);
@@ -307,11 +307,26 @@ Reads environment from .env file if present in current working directory.`
   }
 
   private async generatePythonFieldMappings(base: BaseMetadata, tables: TableMetadata[]) {
+    const pythonFieldNameTransform = (fieldName: string) => {
+      let newFieldName = pascalCase(fieldName
+        .replace('#', 'Num')
+        .replace('>', 'Gt')
+        .replace('<', 'Lt')
+        .replace('?', 'True'));
+
+      // If fieldName starts with a numeric character, prepend an underscore
+      // Python doesn't allow variable names to start with numbers
+      if (newFieldName.match(/^\d/)) {
+        newFieldName = '_' + newFieldName
+      }
+      return newFieldName;
+    }
     const lines: string[] = []
     const tableIds: string[] = [];
     const tableIdToObjectMappings: string[] = [];
+    const tableIdToKeysMappings: string[] = [];
 
-    lines.push("from typing import Optional, TypedDict")
+    lines.push("from typing import Optional, TypedDict, Union, Literal")
 
     const allFields = tables.map((t) => t.fields).flat()
     if (hasAttachmentField(allFields)) {
@@ -322,34 +337,68 @@ Reads environment from .env file if present in current working directory.`
       lines.push(CollaboratorPyImpl)
       lines.push('')
     }
-    
+    if (hasFieldType(allFields, 'button')) {
+      lines.push(ButtonPyImpl)
+      lines.push('')
+    }
+    if (hasFieldType(allFields, 'barcode')) {
+      lines.push(BarcodePyImpl)
+      lines.push('')
+    }
+
     tableIds.push(`TableIds = {`);
     tableIdToObjectMappings.push(`TableIdToObjectMapping = {`);
+    tableIdToKeysMappings.push(`TableIdToKeysMapping = {`);
 
     for (const table of tables) {
       const tableName = pascalCase(table.name)
       
-      const mappingTableName = `${tableName}FieldIdMapping`;
-      lines.push(`${mappingTableName} = {`)
-      tableIds.push(`  '${pascalCase(table.name)}': '${table.id}',`);
-      tableIdToObjectMappings.push(`  '${table.id}': ${mappingTableName},`)
+      lines.push(`${tableName}Keys = Literal[${table.fields.map(field => `"${field.name}"`).join(',')}]`);
+      lines.push(`${tableName}Ids = Literal[${table.fields.map(field => `"${field.id}"`).join(',')}]`);
+      
+      lines.push(`class ${tableName}(TypedDict, total=False):`);
 
+      // Do all the type definitions first
       for (const field of table.fields) {
-        const fieldName = field.name
-        const fieldId = field.id
-        lines.push(`  '${fieldName.replace("'", '\\\'')}': '${fieldId}',`)
+        //let fieldName = pythonFieldNameTransform(field.name);
+        let fieldName = field.id;
+
+        const fieldType = getPythonType(field)
+        // NOTE: Airtable API will NOT return a field if it's blank
+        // so almost everything has to be marked optional unfortunately
+        const isReadonly = isReadonlyField(field)
+        lines.push(`  ${fieldName}: ${fieldType}`)
       }
 
-      lines.push('}');
-      lines.push('');
+      lines.push('')
+
+      // Do all of the name/field ID mappings
+      const mappingTableName = `${tableName}FieldIdMapping`;
+      lines.push(`${mappingTableName} = {`)
+      tableIds.push(`  "${pascalCase(table.name)}": "${table.id}",`);
+      tableIdToObjectMappings.push(`  "${table.id}": ${mappingTableName},`)
+      tableIdToKeysMappings.push(`  "${table.id}": ${tableName}Keys,`)
+
+      for (const field of table.fields) {
+        //let fieldName = pythonFieldNameTransform(field.name);
+        let fieldName = field.name;
+        const fieldId = field.id
+        lines.push(`  "${fieldName}": "${fieldId}",`)
+      }
+
+      lines.push('}')
+      lines.push('')
     }
 
-    tableIds.push(`};`);
+    tableIds.push(`}`);
     tableIdToObjectMappings.push(`}`);
+    tableIdToKeysMappings.push(`}`);
 
     lines.push(...tableIds);
     lines.push('');
     lines.push(...tableIdToObjectMappings);
+    lines.push('');
+    lines.push(...tableIdToKeysMappings);
     lines.push('');
 
     return lines.join('\n')

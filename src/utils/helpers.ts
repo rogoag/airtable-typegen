@@ -14,7 +14,15 @@ export function hasCollaboratorField(fields: FieldMetadata[]) {
 }
 
 export function hasAttachmentField(fields: FieldMetadata[]) {
-  return fields.some((f) => f.type === 'multipleAttachments')
+  return hasFieldType(fields, 'multipleAttachments')
+}
+
+export function hasButtonField(fields: FieldMetadata[]) {
+  return hasFieldType(fields, 'button')
+}
+
+export function hasFieldType(fields: FieldMetadata[], type: string) {
+  return fields.some((f) => f.type === type)
 }
 
 export function getFieldEnumName(table: TableMetadata, field: FieldMetadata) {

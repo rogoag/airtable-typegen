@@ -222,9 +222,9 @@ export function getPythonType(field: FieldMetadata): string {
     case 'formula':
       return ['number', 'currency', 'percent'].includes(field.options.result?.type || "") ? 'float' : 'str';
     case 'barcode':
-      return '{text: str, type: str}';
+      return 'Barcode';
     case 'button':
-      return '{label: str, url?: str}';
+      return 'Button';
     case 'checkbox':
       return 'bool';
     case 'createdBy':
@@ -251,16 +251,22 @@ export function getPythonType(field: FieldMetadata): string {
         // TODO can also handle single/multiple select case...
         // should be able to just call this function again? 
         // But would need to do more clever lookup for single/multi select
-        return 'list[string]'
+        return 'list[str]'
       }
     case 'multipleRecordLinks':
       return 'list[str]';
     case 'singleSelect':
       const choices = field.options?.choices.map((choice) => `'${choice.name.replace("'", "\\\'")}'`);
-      return choices ? `Union[${choices.join(', ')}]` : 'str';
+      if (choices.length === 0) {
+        choices.push('\'\'')
+      }
+      return choices ? `Literal[${choices.join(', ')}]` : 'str';
     case 'multipleSelects':
       const multiChoices = field.options?.choices.map((choice) => `'${choice.name.replace("'", "\\\'")}'`);
-      return multiChoices ? `list[Union[${multiChoices.join(', ')}]]` : 'list[str]';
+      if (multiChoices.length === 0) {
+        multiChoices.push('\'\'')
+      } 
+      return multiChoices ? `list[Literal[${multiChoices.join(', ')}]]` : 'list[str]';
     case 'externalSyncSource':
       return 'Any'; // Replace 'Any' with the appropriate type for unknown in Python
     default:
@@ -298,6 +304,16 @@ export const CollaboratorPyImpl = `class IAirtableCollaborator(TypedDict):
   id: str
   email: str
   name: str
+`
+
+export const ButtonPyImpl = `class Button(TypedDict):
+  label: str
+  url: Optional[str]
+`
+
+export const BarcodePyImpl = `class Barcode(TypedDict):
+  text: str
+  type: str
 `
 
 export const AttachmentPyImpl = `class IAirtableThumbnail(TypedDict):
