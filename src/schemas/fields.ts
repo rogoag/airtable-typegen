@@ -201,6 +201,7 @@ const MultipleLookupValuesField = BasicField.extend({
       z.object({ type: z.literal('multipleAttachments') }), // TODO attachment type
       z.object({ type: z.literal('multipleRecordLinks') }), // TODO record link type
       z.object({ type: z.literal('singleSelect') }),        // TODO source field single select type
+      z.object({ type: z.literal('multipleSelects') }),     // TODO source field single select type
       z.object({ type: z.literal('multilineText') }),       // string[]
       z.object({ type: z.literal('singleLineText') }),      // string[]
       z.object({ type: z.literal('url') }),                 // string[]
