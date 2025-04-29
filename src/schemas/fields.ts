@@ -108,6 +108,14 @@ const PreciseNumberField = BasicField.extend({
   }),
 });
 
+const CheckboxField = z.object({
+  type: z.literal('checkbox'),
+  options: z.object({ 
+    icon: z.string(),
+    color: z.string(),
+  }),
+});
+
 const DateSubField = z.object({
   type: z.literal('date'),
   options: z.object({ dateFormat: DateFormat }),
@@ -160,6 +168,7 @@ const FormulaField = BasicField.extend({
     isValid: z.boolean(),
     referencedFieldIds: z.array(z.string()),
     result: z.nullable(z.discriminatedUnion('type', [
+      CheckboxField,
       DateSubField,
       DateTimeSubField,
       DurationSubField,
@@ -174,6 +183,7 @@ const RollupField = BasicField.extend({
   type: z.literal('rollup'),
   options: z.object({
     result: z.nullable(z.discriminatedUnion('type', [
+      CheckboxField,
       DateSubField,
       DateTimeSubField,
       DurationSubField,
