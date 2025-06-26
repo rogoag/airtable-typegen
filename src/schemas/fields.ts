@@ -110,7 +110,7 @@ const PreciseNumberField = BasicField.extend({
 
 const CheckboxField = z.object({
   type: z.literal('checkbox'),
-  options: z.object({ 
+  options: z.object({
     icon: z.string(),
     color: z.string(),
   }),
@@ -157,7 +157,7 @@ const ExternalSyncSourceField = BasicField.extend({
 const LastModifiedTimeField = BasicField.extend({
   type: z.literal('lastModifiedTime'),
   options: z.object({
-    result: z.discriminatedUnion('type', [DateSubField, DateTimeSubField]),
+    result: z.nullable(z.discriminatedUnion('type', [DateSubField, DateTimeSubField])),
   }),
 });
 
