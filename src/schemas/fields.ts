@@ -161,6 +161,23 @@ const LastModifiedTimeField = BasicField.extend({
   }),
 });
 
+const MultipleSelectsField = BasicField.extend({
+  type: z.literal('multipleSelects'),
+  options: z.object({
+    choices: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        color: SelectColors.optional(),
+      }),
+    ),
+  }),
+});
+
+const SingleSelectField = MultipleSelectsField.extend({
+  type: z.literal('singleSelect'),
+});
+
 const FormulaField = BasicField.extend({
   type: z.literal('formula'),
   options: z.object({
@@ -173,6 +190,7 @@ const FormulaField = BasicField.extend({
       DateTimeSubField,
       DurationSubField,
       PreciseNumberSubField,
+      z.object({ type: z.literal('singleSelect') }),
       z.object({ type: z.literal('singleLineText') }),
     ])),
   }),
@@ -238,23 +256,6 @@ const MultipleRecordLinks = BasicField.extend({
 const DurationField = BasicField.extend({
   type: z.literal('duration'),
   options: z.object({ durationFormat: DurationFormat }),
-});
-
-const MultipleSelectsField = BasicField.extend({
-  type: z.literal('multipleSelects'),
-  options: z.object({
-    choices: z.array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        color: SelectColors.optional(),
-      }),
-    ),
-  }),
-});
-
-const SingleSelectField = MultipleSelectsField.extend({
-  type: z.literal('singleSelect'),
 });
 
 const RatingField = BasicField.extend({
